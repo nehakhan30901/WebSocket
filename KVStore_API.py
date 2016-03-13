@@ -5,40 +5,78 @@ from tornado import gen
 import motor.motor_tornado
 from pymongo import MongoClient
 import pprint
+import yaml
+
+class DbAccess_Pymongo:
+
+    def __init__(self,db_config):
+
+        config=self.parse_config(db_config)
+
+        self.identity=config["document"]
+        self.collection=MongoClient(config["client"])[config['db']][config['collection']]
+
+        self.collection.insert(self.identity)
+
+    def parse_config(self,db_config):
+
+        config_file=open(db_config)
+        config=yaml.load(config_file)
+        config_file.close()
+        return config
+
+    def get(self,key):
+        try: 
+            document=self.collection.find_one(self.identity)
+            return document[key]
+        except KeyError as e:
+            return "Doesnt exists in store"
+
+
+    def set(self,key,value):
+        field={key:value}
+        self.collection.update(self.identity,{'$set':field})
+        return 'inserted field '+key
 
 
 #class to implement motor usage for mongodb interface
 class DbAccess:
 
-    def __init__(self):
-    #self.client=MongoClient("mongodb://localhost:27017")
-        self.client=motor.motor_tornado.MotorClient("mongodb://localhost:27017")
-        self.db=self.client["storedb"] 
-        self.store_collection=self.db['store']
+    def __init__(self,db_config):
+
+        config=self.parse_config(db_config)
+
+        self.identity=config["document"]
+        self.collection=motor.motor_tornado.MotorClient(config["client"])[config['db']][config['collection']]
+
+        self.collection.insert(self.identity)
+
+    def parse_config(self,db_config):
+
+        config_file=open(db_config)
+        config=yaml.load(config_file)
+        config_file.close()
+        return config
 
     @gen.coroutine  
     def get_value(self,key):
-        collection=self.db.self.store_collection
-        document=yield collection.find_one()
-        return document[key]
+        try:
+            document=yield self.collection.find_one(self.identity)
+            return document[key]
+        except KeyError as e:
+            return "Doesnt exists in store"
 
     def get(self,key):
-        self.get_value(key)
-        return 'ok'
-
+        return(self.get_value(key))
+        
     @gen.coroutine 
     def set_field(self,key,value):
-        collection=self.db.self.store_collection
         field={key:value}
-        document=yield collection.find_one()
-        if not(document):
-            collection.insert(field)
-        else:
-            collection.update(document,{'$set':field})
+        self.collection.update(self.identity,{'$set':field})
 
     def set(self,key,value):
         self.set_field(key,value)
-        return 'ok'
+        return 'inserted field '+key
 
 
 class WebSocket(tornado.websocket.WebSocketHandler):
@@ -51,7 +89,8 @@ class WebSocket(tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
 
-        db_access_obj=DbAccess()
+        db_access_obj=DbAccess_Pymongo('appcfg.yaml')
+        #db_access_obj=DbAccess('appcfg.yaml')
 
         if message.startswith('get'):
             key=message.split('\\')[1]

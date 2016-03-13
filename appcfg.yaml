@@ -1,0 +1,7 @@
+client: "mongodb://localhost:27017"
+db: "dbStore"
+collection: "store"
+document:
+ id: "kvstore_document"
+
+
